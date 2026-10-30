@@ -1,0 +1,86 @@
+#: table_doi: 10.17182/hepdata.77719.v2/t3
+#: name: Exclusion contour 2 (obs.)
+#: description: Observed 95% CL exclusion contours on the gluino and lightest neutralino masses in a SUSY scenario where gluinos are produced in pairs and decay into the lightest neutralino via a two-steps cascade, $\tilde g\to q\bar{q}^{'}\tilde{\chi}_1^\pm$ followed by $\tilde{\chi}_1^\pm\to W^\pm\tilde{\chi}_2^0$ and $\tilde{\chi}_2^0\to Z\tilde{\chi}_1^0$.
+#: data_file: limitsFig04bObs.yaml
+#: data_license:   
+#: keyword reactions: P P --> GLUINO GLUINO X
+#: keyword observables: 
+#: keyword cmenergies: 13000.0
+#: keyword phrases: Inclusive | Limits | Exclusion | Gluino | Neutralino | Proton-Proton Scattering
+#: SQRT(S) [GEV],13000.0
+M(GLUINO) [GEV],M(NEUTRALINO1) [GEV]
+618,468
+623,471
+652,488
+671,499
+686,526
+688,528
+706,554
+722,570
+732,581
+758,606
+761,609
+790,636
+792,639
+828,661
+832,664
+862,681
+882,691
+898,704
+911,719
+932,746
+933,746
+968,771
+974,774
+1002,788
+1030,801
+1038,807
+1068,829
+1072,832
+1108,856
+1108,856
+1142,872
+1168,884
+1178,888
+1212,892
+1232,884
+1248,879
+1282,865
+1318,858
+1352,859
+1360,856
+1388,830
+1389,829
+1422,810
+1455,801
+1458,801
+1491,774
+1492,746
+1492,726
+1493,719
+1501,691
+1512,664
+1522,636
+1526,609
+1528,603
+1533,581
+1541,554
+1545,526
+1546,499
+1554,471
+1562,444
+1561,416
+1562,389
+1562,387
+1569,361
+1566,334
+1564,306
+1567,279
+1570,251
+1572,224
+1571,196
+1572,169
+1572,141
+1573,114
+1573,0
+

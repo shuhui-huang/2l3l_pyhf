@@ -1,0 +1,17 @@
+#: table_doi: 10.17182/hepdata.77719.v2/t25
+#: name: X-section U.L., acc., eff. 9
+#: description: Observed and expected 95% CL upper limits on $pp\to \tilde{t}^{}_\mathrm{1}\tilde{t}^{*}_\mathrm{1}$ production cross-sections in a SUSY scenario where pairs of top-antitop squarks are produced and decay into the lightest neutralino via a two-steps cascade, $\tilde t^{}_{1}\to t\tilde{\chi}_2^0$ followed by $\tilde{\chi}_2^0\to \tilde{\chi}_1^\pm W^\mp$ and $\tilde{\chi}_1^\pm\to f\bar{f^{'}}\tilde{\chi}_1^0$. The lightest chargino and the lightest neutralino are assumed to be nearly mass-degenerate. The table also shows the signal acceptance and reconstruction efficiency for the signal region(s) with sensitivity to this scenario.
+#: data_file: upperlimitsFig04e.yaml
+#: data_license:   
+#: keyword reactions: P P --> SQUARK SQUARK X
+#: keyword observables: 
+#: keyword cmenergies: 13000.0
+#: keyword phrases: Inclusive | Limits | Exclusion | Acceptance | Efficiency | Squark | Stop | Neutralino | Proton-Proton Scattering
+#: Signal region,Rpc3LSS1b
+#: SQRT(S) [GEV],13000.0
+M(STOP1) [GEV],SIG(OBS) 95%CL [FB]
+550,84
+600,72
+650,68
+700,69
+750,87

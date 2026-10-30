@@ -1,0 +1,29 @@
+# Exclusion fit of the gluino 2-step WZ grid in SR RpcGGwz2 (binned in meff).
+# HistFitter equivalent:
+#   generateCommands.py --fit --fitmodel excl --Model Mc16SusyGG2StepWZ --SR RpcGGwz2 --Sys ALL
+#       --extraFitConfig '--binnedFitSR RpcGGwz2:meff'
+# Output: results/<Name>/ws.json (background-only) + patchset.json (one patch per signal point)
+General:
+  Name: excl_GG2StepWZ_RpcGGwz2
+  Analysis: ss3l
+  FitType: excl
+  Lumi: 138965
+  InputPath: InputTrees
+  OutputDir: results
+  Systematics: ALL
+  Blind: []
+  POI: mu_SIG
+  POIBounds: [0, 10]
+
+Regions:
+  SR:
+    - {Name: RpcGGwz2, Variable: meff}
+
+Samples:
+  Data: ntuple
+  Backgrounds: [Multitop, SM4tops, OtherMultiboson, ttW, ttZ, WZ, MisCharge, Fakes]
+  Signal:
+    Grid: Mc16SusyGG2StepWZ   # share/susyGridFiles/<Grid>
+    SigNameSchema: "SP:4,LSP:7"  # positions of (m0, m12) in the physics short name
+    Points: all               # or a list of DSIDs
+    Exclude: []               # DSIDs to skip

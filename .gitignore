@@ -1,0 +1,13 @@
+# inputs / outputs
+InputTrees/
+results/
+batch/
+*.root
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+build/
+dist/

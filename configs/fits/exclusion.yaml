@@ -1,0 +1,32 @@
+# Exclusion fits over a signal grid (HistFitter: -F excl -p [-l], merge, harvestToContours, plotContours)
+General:
+  Workspace: results/excl_GG2StepWZ_RpcGGwz2   # ws.json (background-only) + patchset.json
+  Optimizer: scipy           # scipy | minuit (hypothesis tests); fits always use minuit
+  ATLASLabel: Internal
+
+Fits:
+  - Name: exclusion
+    Type: excl
+    Points: all                # or a list of DSIDs / patch names
+    Calculator: asymptotics    # asymptotics | toybased (HistFitter calculatorType 2 | 0)
+    TestStat: qtilde           # one-sided profile likelihood (HistFitter testStatType 3)
+    NToys: 1000                # toybased only (per job, see 'fit2l3l batch --seeds')
+    Seed: 0
+    SaveToys: false            # keep toy distributions to merge several jobs
+    CL: 0.95
+    UpperLimit: {Enabled: true, Scan: null}   # null: automatic root finding; or [low, high, n]
+    TheoryVariations: true     # observed CLs with signal xsec +-1 sigma (dotted lines)
+    Blind: []                  # fit-time blinding (roles or region names)
+    Jobs: 1                    # parallel processes over the signal points
+
+# exclusion contour plot (also: fit2l3l contours <hypotest_list.json> ...)
+Contours:
+  Model: Mc16SusyGG2StepWZ     # plotting model in fit2l3l/analysis/ss3l/plotting.py
+  XKey: m0
+  YKey: m12
+  Interpolation: linear        # linear | cubic | rbf
+  DrawCLs: false               # grey numbers: observed CLs
+  DrawXS: false                # grey numbers: excluded cross-section
+  OneD: false                  # 1D: upper limit on the cross-section vs XKey
+  # BestSR:                    # combine with other SRs (best expected CLs per point)
+  #   RpcGGwz1: results/excl_GG2StepWZ_RpcGGwz1/fits/exclusion/hypotest_list.json

@@ -1,0 +1,15 @@
+# Discovery fit and model-independent upper limits (HistFitter: -F disc + UpperLimitTable.py)
+General:
+  Workspace: results/disc_RpcGGwz2
+  Optimizer: scipy           # scipy | minuit (hypothesis tests); fits always use minuit
+
+Fits:
+  - Name: discovery
+    Type: disc
+    Calculator: asymptotics    # toybased for the published numbers (NToys, Seed, SaveToys)
+    NToys: 5000
+    Seed: 0
+    CL: 0.95
+    UpperLimit: {Enabled: true, Scan: null}   # e.g. [0, 30, 31] for a linear scan (needed with SaveToys)
+    Plots: [prefit, postfit, pulls]
+    Tables: [yields, systematics]

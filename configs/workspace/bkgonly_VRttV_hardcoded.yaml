@@ -1,0 +1,23 @@
+# Background-only fit of ttV validation regions with hard-coded data counts, Poisson
+# constraints for the data-driven backgrounds and a fixed ttW normalisation factor.
+# HistFitter equivalent:
+#   useDataSample=False; generateCommands.py --fit --fitmodel bkg --VR VRTTV,VRTTW --Sys DDFLAT20
+#       --extraFitConfig '--NF ttW --StatConstraintType Poisson'
+General:
+  Name: bkgonly_VRttV_hardcoded
+  Analysis: ss3l
+  FitType: bkg
+  Lumi: 138965
+  InputPath: InputTrees
+  OutputDir: results
+  Systematics: DDFLAT20         # 20% flat on MC backgrounds + FAKES/CHFLIP uncertainties
+  StatConstraint: Poisson       # data-driven stat. uncertainties as shapesys (Poisson)
+
+Regions:
+  VR: [VRTTV, VRTTW]            # only VRs given: they are fitted (HistFitter convention)
+
+Samples:
+  Data: hardcoded               # dataCounts of share/hardCodedYields.json
+  Backgrounds: [Multitop, SM4tops, OtherMultiboson, ttW, ttZ, WZ, MisCharge, Fakes]
+
+FixedNF: [ttW]                  # ttW scaled by NF["ttW"] of hardCodedYields.json, with its uncertainty
