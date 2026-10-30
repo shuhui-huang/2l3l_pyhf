@@ -1,0 +1,89 @@
+#: table_doi: 10.17182/hepdata.77719.v2/t9
+#: name: Exclusion contour 5 (obs.)
+#: description: Observed 95% CL exclusion contours on the gluino and lightest top squark masses in a SUSY scenario where gluinos are produced in pairs and decay into a top quark and an antitop squark, which in turn decays via non-zero baryon-number-violating RPV couplings $\lambda^{''}_{313}$ or $\lambda^{''}_{323}$, $\tilde g\to \bar{t}\tilde{t}_1$ followed by $\tilde{t}_1\to \bar b\bar d / \bar b \bar s$.
+#: data_file: limitsFig05aObs.yaml
+#: data_license:   
+#: keyword reactions: P P --> GLUINO GLUINO X
+#: keyword observables: 
+#: keyword cmenergies: 13000.0
+#: keyword phrases: Inclusive | Limits | Exclusion | RPV | Gluino | Proton-Proton Scattering
+#: SQRT(S) [GEV],13000.0
+M(GLUINO) [GEV],M(STOP1) [GEV]
+641,415
+644,445
+645,446
+671,475
+675,479
+698,505
+705,512
+726,535
+735,544
+754,565
+765,576
+783,595
+795,607
+812,625
+825,638
+841,655
+855,669
+871,685
+885,699
+900,715
+915,730
+930,745
+945,760
+960,775
+975,790
+989,805
+1005,821
+1020,835
+1035,850
+1051,865
+1065,879
+1083,895
+1095,907
+1114,925
+1125,936
+1146,955
+1155,964
+1178,985
+1185,992
+1210,1015
+1215,1020
+1242,1045
+1245,1048
+1274,1075
+1275,1076
+1305,1088
+1335,1087
+1365,1086
+1395,1085
+1410,1075
+1425,1065
+1442,1045
+1448,1015
+1449,985
+1450,955
+1451,925
+1452,895
+1453,865
+1454,835
+1454,805
+1455,793
+1457,775
+1461,745
+1455,725
+1450,715
+1436,685
+1425,663
+1422,655
+1409,625
+1400,595
+1408,565
+1416,535
+1425,505
+1425,504
+1434,475
+1440,445
+1436,400
+

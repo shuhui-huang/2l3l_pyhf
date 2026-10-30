@@ -1,0 +1,30 @@
+# Background-only fit: WZ normalised in CRWZ2j, extrapolated to VRs and SRs.
+# HistFitter equivalent:
+#   generateCommands.py --fit --fitmodel bkg --CR CRWZ2j --VR VRWZ4j,VRWZ6j --SR RpcSSwz1,RpcSSwz4
+#       --Sys ALL --doBlind SR --extraFitConfig '--bkgToNormalize WZ:CRWZ2j --binnedFitSR RpcSSwz1:met'
+General:
+  Name: bkgonly_RpcSSwz
+  Analysis: ss3l              # python definitions: fit2l3l/analysis/ss3l
+  FitType: bkg                # bkg | excl | disc
+  Lumi: 138965                # pb^-1 (input file names: <sample>.<Lumi>.root)
+  LumiUncertainty: 0.017
+  InputPath: InputTrees       # directory with the ntuples
+  InputType: ntuple           # ntuple | histogram
+  OutputDir: results          # -> results/<Name>/ws.json
+  Systematics: ALL            # ALL | NONE | groups (EG,JET,MU,MET,FT,PU,TRIG,FAKES,CHFLIP,TH) | FLAT<n> | DDFLAT<n>
+  Blind: [SR]                 # SR, CR, VR, ALL
+  StatConstraint: Gaussian    # Gaussian | Poisson (data-driven stat. uncertainties)
+
+Regions:
+  CR: [CRWZ2j]
+  VR: [VRWZ4j, VRWZ6j]
+  SR:
+    - {Name: RpcSSwz1, Variable: met}   # binned in met (binning defined in python)
+    - RpcSSwz4                          # single bin
+
+Samples:
+  Data: ntuple                # ntuple | hardcoded (dataCounts of hardCodedYields.json)
+  Backgrounds: [Multitop, SM4tops, OtherMultiboson, ttW, ttZ, WZ, MisCharge, Fakes]
+
+NormFactors:                  # HistFitter --bkgToNormalize WZ:CRWZ2j
+  WZ: CRWZ2j

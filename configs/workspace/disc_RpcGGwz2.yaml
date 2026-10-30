@@ -1,0 +1,19 @@
+# Discovery (model-independent) fit in RpcGGwz2: dummy signal of 1 event in the SR.
+# HistFitter equivalent: generateCommands.py --fit --fitmodel disc --SR RpcGGwz2 --Sys ALL
+General:
+  Name: disc_RpcGGwz2
+  Analysis: ss3l
+  FitType: disc
+  Lumi: 138965
+  InputPath: InputTrees
+  OutputDir: results
+  Systematics: ALL
+  POI: mu_SIG
+  POIBounds: [0, 100]
+
+Regions:
+  SR: [RpcGGwz2]
+
+Samples:
+  Data: ntuple
+  Backgrounds: [Multitop, SM4tops, OtherMultiboson, ttW, ttZ, WZ, MisCharge, Fakes]

@@ -1,0 +1,20 @@
+# Background-only fit (HistFitter: HistFitter.py -F bkg -D before,after,corrMatrix + YieldsTable/SysTable)
+General:
+  Workspace: results/bkgonly_RpcSSwz   # directory with ws.json and meta.json
+  Optimizer: scipy                     # hypothesis tests: scipy (fast) | minuit; fits always use minuit
+  InterpolationCodes: {}               # e.g. {normsys: code4, histosys: code4p}
+  ATLASLabel: Internal
+  PlotFormats: [pdf, png]
+
+Fits:
+  - Name: bkgonly
+    Type: bkg                 # bkg | disc | excl (default: type of the workspace)
+    # FitRegions: [CRWZ2j]    # default: CRs (see README for the HistFitter conventions)
+    # ValidationRegions: []   # default: all other regions
+    Blind: []                 # regions/roles whose data are replaced by the expectation at fit time
+    Asimov: false             # fit the background-only Asimov dataset
+    Fixed: {}                 # {parameter: value}
+    Minos: [mu_WZ]
+    Plots: [prefit, postfit, summary, pulls, correlation]
+    Tables: [yields, systematics]
+    Ranking: {Enabled: false, POI: mu_WZ, MaxPars: 20}   # 4 fits per parameter: slow
