@@ -79,6 +79,8 @@ DEFAULT_GENERAL = {
     "Measurement": "NormalMeasurement",
     "Options": {},
     "HEPDataRecord": "ins0000000",  # inspire id for the patchset metadata
+    # missing hard-coded (data-driven) yields for a region: error | zero (HistFitter: zero)
+    "MissingYields": "error",
     "Description": "",
 }
 
@@ -348,7 +350,8 @@ class Composer:
         weights = list(sample.weights) if sample.weights is not None else list(self.analysis.nominal_weights)
         weights += list(sample.extra_weights)
         if sample.name in self.extra_weights:
-            weights += as_list(self.extra_weights[sample.name])
+            extra = self.extra_weights[sample.name]
+            weights += [str(w) for w in extra] if isinstance(extra, (list, tuple)) else [str(extra)]
         if sample.name in self.fixed_nf:
             nf = self.analysis.normalization_factors.get(sample.name)
             if nf is None:
@@ -483,6 +486,15 @@ class Composer:
             registry.signal_samples = []
 
         free_nf_samples = {nf["Sample"]: nf for nf in self.norm_factors}
+        mc_backgrounds = [n for n in bkg_names if analysis.sample(n).kind == MC]
+        for name in self.fixed_nf:
+            if name not in mc_backgrounds:
+                raise ValueError(f"FixedNF: '{name}' is not an MC background of this workspace ({mc_backgrounds})")
+            if name not in analysis.normalization_factors:
+                raise ValueError(f"FixedNF: no NF for '{name}' in the hard-coded yields JSON")
+        for name in self.extra_weights:
+            if name not in mc_backgrounds:
+                raise ValueError(f"ExtraSampleWeights: '{name}' is not an MC background of this workspace")
         for nf in self.norm_factors:
             if nf["Sample"] not in bkg_names:
                 raise ValueError(f"NormFactors: sample {nf['Sample']} is not among the backgrounds")
@@ -607,7 +619,9 @@ class Composer:
                     elif isinstance(syst, TreeSyst):
                         add_syst(self._tree_syst(syst), sample, syst.group)
                     elif isinstance(syst, TheorySyst):
-                        entry = self._theory_syst(syst, sample, registry, sample_regions[sample.name])
+                        entry = self._theory_syst(
+                            syst, sample, registry, sample_regions[sample.name], sample.name in free_nf_samples
+                        )
                         if entry is not None:
                             add_syst(entry, sample, syst.group)
                     elif isinstance(syst, NormSyst):
@@ -684,13 +698,17 @@ class Composer:
     def _theory_values(self, key: str, direction: str) -> Optional[Dict[str, Any]]:
         return self.analysis.theory_values.get(f"thUnc_{key}{direction}")
 
-    def _theory_syst(self, syst: TheorySyst, sample: Sample, registry: Registry, regions: List[str]):
+    def _theory_syst(
+        self, syst: TheorySyst, sample: Sample, registry: Registry, regions: List[str], normalized: bool = False
+    ):
         up_vals = self._theory_values(syst.key, "Up")
         down_vals = self._theory_values(syst.key, "Down")
         if up_vals is None or down_vals is None:
             log.debug(f"theory uncertainty thUnc_{syst.key}Up/Down not found, {syst.name} skipped")
             return None
         binned = bool(self.general.get("BinnedTheoryUncertainty")) and syst.allow_binned
+        if syst.binned_only_if_normalized and not normalized:
+            binned = False
 
         def factor(values, sign):
             def _f(region: str, nbins: int) -> np.ndarray:
@@ -699,11 +717,15 @@ class Composer:
                 if reg_vals is None:
                     log.warning(f"{syst.name}: no value for region {region}, no effect assigned")
                     return np.ones(nbins)
-                if binned and entry.variable in reg_vals and len(reg_vals[entry.variable]) == nbins:
-                    rel = np.asarray(reg_vals[entry.variable], dtype=float)
+                var_vals = reg_vals.get(entry.variable, reg_vals.get(entry.variable.replace("/", "")))
+                if binned and var_vals is not None and len(var_vals) == nbins:
+                    rel = np.asarray(var_vals, dtype=float)
                 else:
                     if binned and nbins > 1:
                         log.warning(f"{syst.name}: no binned values for {region}/{entry.variable}, using 'cuts'")
+                    if CUTS not in reg_vals:
+                        log.warning(f"{syst.name}: no 'cuts' value for region {region}, no effect assigned")
+                        return np.ones(nbins)
                     rel = np.full(nbins, float(reg_vals[CUTS][0]))
                 return 1.0 + sign * rel
 
@@ -735,7 +757,11 @@ class Composer:
 
     def _lookup(self, table: Dict[str, Any], region: str, nbins: int, what: str) -> Optional[np.ndarray]:
         variable = self.general_variable(region)
-        values = table.get(region, {}).get(variable)
+        entry = table.get(region, {})
+        values = entry.get(variable)
+        if values is None:
+            # HistFitter JSON convention: "met/ht_lept" is stored as "metht_lept"
+            values = entry.get(variable.replace("/", ""))
         if values is None:
             return None
         values = np.asarray(values, dtype=float)
@@ -770,7 +796,10 @@ class Composer:
         def _get(region, nbins):
             y = self._lookup(nominal, region, nbins, f"{sample.name} yields")
             if y is None:
-                log.warning(f"no {sample.name} yields for {region}/{self.general_variable(region)}: set to 0")
+                msg = f"no {sample.name} yields ('{spec.nominal}') for {region}/{self.general_variable(region)}"
+                if self.general.get("MissingYields", "error") != "zero":
+                    raise ValueError(msg + " in the hard-coded yields JSON (General.MissingYields: zero to use 0)")
+                log.warning(msg + ": set to 0")
                 y = np.zeros(nbins)
             s = self._lookup(stat, region, nbins, f"{sample.name} stat") if stat else None
             s = np.zeros(nbins) if s is None else np.abs(s)
@@ -780,7 +809,20 @@ class Composer:
             return lambda region, nbins: (_get(region, nbins)[0], _get(region, nbins)[1] ** 2)
         if which in ("stat_up", "stat_down"):
             sign = 1.0 if which == "stat_up" else -1.0
-            return lambda region, nbins: (_get(region, nbins)[0] + sign * _get(region, nbins)[1], np.zeros(nbins))
+
+            def _stat(region, nbins):
+                y, s = _get(region, nbins)
+                # HistFitter: relative variation 1 +- stat/yield, no effect where yield = 0.
+                # If the uncertainty is (almost) as large as the yield, y - s would be
+                # <= 0; the log-normal-like y^2/(y + s) is used instead (y - s is
+                # ill-defined there, HistFactory clamps the total at zero).
+                varied = y + sign * s
+                if sign < 0:
+                    safe = np.divide(y * y, y + s, out=np.zeros_like(y), where=(y + s) > 0)
+                    varied = np.where(varied < 0.1 * y, safe, varied)
+                return np.where(y > 0, varied, y), np.zeros(nbins)
+
+            return _stat
         if which in ("syst_up", "syst_down"):
             table = up if which == "syst_up" else down
             sign = 1.0 if which == "syst_up" else -1.0

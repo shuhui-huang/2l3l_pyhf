@@ -1,5 +1,5 @@
 #!/bin/bash
-# End-to-end example on toy ntuples (no real inputs needed), ~10 minutes on one core.
+# End-to-end example on toy ntuples (no real inputs needed), a few minutes on one core.
 #   source setup.sh && bash examples/run_toy_example.sh
 set -e
 cd "$(dirname "$0")/.."

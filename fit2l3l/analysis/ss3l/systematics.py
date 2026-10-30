@@ -229,7 +229,10 @@ def theory_systematics():
         )
     ]
     # WZ: binned values available (and normalised in the CR if WZ floats)
-    th["WZ"] = [TheorySyst(f"theoryUncert_WZ{src}", f"WZ{src}", allow_binned=True) for src in THEORY_SOURCES]
+    th["WZ"] = [
+        TheorySyst(f"theoryUncert_WZ{src}", f"WZ{src}", allow_binned=True, binned_only_if_normalized=True)
+        for src in THEORY_SOURCES
+    ]
     # everything else: <sample><source>
     for sample in ("ttZ", "ttH", "RareTop_NottH", "Multiboson", "ttV"):
         th[sample] = [

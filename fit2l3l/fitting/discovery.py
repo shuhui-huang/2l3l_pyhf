@@ -21,7 +21,7 @@ import pyhf
 from scipy.stats import norm
 
 from fit2l3l.fitting import bkgonly, common, toys
-from fit2l3l.utils import write_json
+from fit2l3l.utils import read_json, write_json
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def upper_limit(model, data, fit_cfg, kwargs, *, max_poi: float = 1e4):
         obs, exp = hypo(mu_max)
         if (obs < level and max(exp) < level) or mu_max >= max_poi:
             break
-        mu_max *= 2.0
+        mu_max = min(2.0 * mu_max, max_poi)
     # finer bracketing from above keeps the scan points close to the limits
     obs, exp = linear(np.linspace(0.0, mu_max, npoints))
     return obs, exp, f"scan[0,{mu_max:g},{npoints}]"
@@ -107,8 +107,13 @@ def run(ctx: common.WorkspaceContext, general: Dict[str, Any], fit_cfg: Dict[str
     res = bkgonly._fit(model, data, fit_cfg, general)
     common.save_fit_results(res, outdir / "fit_results.json")
     (outdir / "fit_results.txt").write_text(common.print_parameters(res) + "\n")
+    # post-fit outputs on the background-only model (dummy signal removed), using the
+    # fitted background parameters and their covariance
     dummy = [s for s in model.config.samples if s.startswith("DiscoveryMode_")]
-    bkgonly.postfit_outputs(ctx, general, fit_cfg, prep, res, outdir, exclude_samples=dummy, ranking_poi=poi)
+    bkg_spec = dict(pyhf.Workspace(ctx.spec).prune(samples=dummy))
+    prep_bkg = bkgonly.prepare(ctx, general, fit_cfg, spec=bkg_spec, poi=None)
+    prep_bkg["ranking_model"], prep_bkg["ranking_data"] = model, data
+    bkgonly.postfit_outputs(ctx, general, fit_cfg, prep_bkg, res, outdir, ranking_poi=poi)
 
     kwargs = hypotest_kwargs(model, fit_cfg)
     common.setup_backend(general)
@@ -162,6 +167,25 @@ def run(ctx: common.WorkspaceContext, general: Dict[str, Any], fit_cfg: Dict[str
         f"discovery: p0 = {result['p0']:.3g} (Z = {result['Z']:.2f}), "
         + (f"S95 obs = {result.get('S95_obs', float('nan')):.2f}, exp = {result.get('S95_exp', float('nan')):.2f}")
     )
+    return result
+
+
+def merge_toys(outdir: pathlib.Path, level: float = 0.05) -> Dict[str, Any]:
+    """Combines ``toys/toys_ul_seed*.npz`` of several jobs into the upper limits of
+    ``discovery.json`` (HistFitter UpperLimitParellel + analyULtoys)."""
+    outdir = pathlib.Path(outdir)
+    result = read_json(outdir / "discovery.json")
+    files = sorted(str(f) for f in (outdir / "toys").glob("toys_ul_seed*.npz"))
+    merged = toys.merge(files, level)
+    obs, exp = merged["upper_limit"], merged["expected_upper_limit"]
+    pois = [p["poi"] for p in merged["points"]]
+    clb = float(np.interp(obs, pois, [p["CLb"] for p in merged["points"]]))
+    lumi = result.get("lumi_fb") or float("nan")
+    result.update({"S95_obs": obs, "S95_exp": exp[2], "S95_exp_band": exp, "visible_xsec_obs_fb": obs / lumi,
+                   "visible_xsec_exp_fb": exp[2] / lumi, "CLb": clb, "upper_limit_method": "toys",
+                   "ntoys": int(merged["points"][0]["ntoys_b"]), "toy_files": len(files)})
+    write_json(result, outdir / "discovery.json")
+    _write_table(result, outdir / "upper_limit_table")
     return result
 
 

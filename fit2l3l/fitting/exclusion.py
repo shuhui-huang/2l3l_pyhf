@@ -100,22 +100,38 @@ def run_point(
     }
     if kwargs["calctype"] == "toybased":
         result.update({"ntoys": kwargs["ntoys"], "seed": seed})
+    saved_toys = kwargs["calctype"] == "toybased" and fit_cfg.get("SaveToys")
     try:
-        if kwargs["calctype"] == "toybased" and fit_cfg.get("SaveToys"):
-            dist = toys.generate(model, data, [1.0], ntoys=kwargs["ntoys"], seed=seed,
+        if saved_toys:
+            # one set of toys per POI: mu = 1, the theory variations and the upper-limit
+            # scan; jobs with different seeds are merged by `fit2l3l merge`
+            pois, roles = [1.0], ["nominal"]
+            if fit_cfg.get("TheoryVariations", True) and info.get("xsec_rel_up") is not None:
+                pois += [1.0 + float(info["xsec_rel_up"]), max(1.0 - float(info["xsec_rel_down"]), 1e-3)]
+                roles += ["theory_up", "theory_down"]
+            ul_cfg = fit_cfg.get("UpperLimit") or {}
+            if ul_cfg.get("Enabled", True):
+                scan = ul_cfg.get("Scan")
+                if isinstance(scan, (list, tuple)) and len(scan) == 3:
+                    grid = [float(x) for x in np.linspace(float(scan[0]), float(scan[1]), int(scan[2])) if x > 0]
+                    pois += grid
+                    roles += ["scan"] * len(grid)
+                else:
+                    log.warning(f"{patch_name}: toy upper limits need UpperLimit.Scan: [low, high, n]; skipped")
+            dist = toys.generate(model, data, pois, ntoys=kwargs["ntoys"], seed=seed,
                                  test_stat=fit_cfg.get("TestStat", "qtilde"), init_pars=kwargs["init_pars"],
                                  fixed_params=kwargs["fixed_params"], par_bounds=kwargs["par_bounds"])
+            dist["roles"] = np.asarray(roles)
             toy_file = outdir / "toys" / f"toys_{patch_name}_seed{seed}.npz"
             toys.save(dist, toy_file)
-            merged = toys.merge([str(toy_file)])["points"][0]
-            cls_obs, cls_exp = merged["CLs"], merged["CLs_exp"]
+            apply_toy_results(result, toys.merge([str(toy_file)], 1.0 - float(fit_cfg.get("CL", 0.95))))
         else:
             if kwargs["calctype"] == "toybased":
                 np.random.seed(seed)
             cls_obs, cls_exp = _hypotest(model, data, 1.0, fit_cfg, kwargs)
-        result["CLs"] = float(cls_obs)
-        for key, value in zip(EXPECTED_KEYS, cls_exp):
-            result[key] = float(value)
+            result["CLs"] = float(cls_obs)
+            for key, value in zip(EXPECTED_KEYS, cls_exp):
+                result[key] = float(value)
     except Exception as exc:
         log.error(f"{patch_name}: hypotest failed: {exc}")
         log.debug(traceback.format_exc())
@@ -125,7 +141,8 @@ def run_point(
             result[key] = float("nan")
 
     # observed CLs with the signal cross-section varied by its uncertainty
-    if fit_cfg.get("TheoryVariations", True) and info.get("xsec_rel_up") is not None and not result["failedfit"]:
+    if (fit_cfg.get("TheoryVariations", True) and info.get("xsec_rel_up") is not None and not result["failedfit"]
+            and not saved_toys):
         for key, mu in (("CLs_theory_up", 1.0 + float(info["xsec_rel_up"])), ("CLs_theory_down", 1.0 - float(info["xsec_rel_down"]))):
             try:
                 if kwargs["calctype"] == "toybased":
@@ -136,7 +153,7 @@ def run_point(
                 result[key] = float("nan")
 
     # upper limit on mu_SIG
-    if (fit_cfg.get("UpperLimit") or {}).get("Enabled", True) and not result["failedfit"]:
+    if (fit_cfg.get("UpperLimit") or {}).get("Enabled", True) and not result["failedfit"] and not saved_toys:
         try:
             if kwargs["calctype"] == "toybased":
                 np.random.seed(seed)
@@ -169,6 +186,30 @@ def run_point(
         + (f", UL = {result['upperLimit']:.3g}" if "upperLimit" in result else "")
     )
     return result
+
+
+def apply_toy_results(result: Dict[str, Any], merged: Dict[str, Any]) -> None:
+    """Fills CLs, theory-varied CLs and upper limits of a point from merged toys."""
+    roles = merged.get("roles") or ["nominal"] + ["scan"] * (len(merged["points"]) - 1)
+    for role, p in zip(roles, merged["points"]):
+        if role == "nominal":
+            result["CLs"] = p["CLs"]
+            for key, value in zip(EXPECTED_KEYS, p["CLs_exp"]):
+                result[key] = value
+            result["ntoys"] = p["ntoys_b"]
+        elif role == "theory_up":
+            result["CLs_theory_up"] = p["CLs"]
+        elif role == "theory_down":
+            result["CLs_theory_down"] = p["CLs"]
+    result["toy_files"] = len(merged["files"])
+    if "upper_limit" in merged:
+        result["upperLimit"] = merged["upper_limit"]
+        for key, value in zip(UL_KEYS, merged["expected_upper_limit"]):
+            result[key] = value
+        result["upperLimitMethod"] = "toys"
+        if result.get("xsec"):
+            result["excludedXsec"] = result["upperLimit"] * result["xsec"]
+            result["expectedExcludedXsec"] = result["expectedUpperLimit"] * result["xsec"]
 
 
 def select_points(ctx: common.WorkspaceContext, points: Any) -> List[str]:
@@ -237,15 +278,10 @@ def merge(outdir: pathlib.Path, ctx: Optional[common.WorkspaceContext] = None, *
         for tag, res in merged_toys.items():
             name = tag[len("toys_"):] if tag.startswith("toys_") else tag
             point_file = outdir / "points" / f"{name}.json"
-            if not point_file.exists() or len(res["points"]) != 1:
+            if not point_file.exists():
                 continue
             point = read_json(point_file)
-            p = res["points"][0]
-            point["CLs"] = p["CLs"]
-            for key, value in zip(EXPECTED_KEYS, p["CLs_exp"]):
-                point[key] = value
-            point["ntoys"] = p["ntoys_b"]
-            point["toy_files"] = len(res["files"])
+            apply_toy_results(point, res)
             write_json(point, point_file)
     points = []
     for f in sorted((outdir / "points").glob("*.json")):

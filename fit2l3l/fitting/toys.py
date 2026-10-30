@@ -21,6 +21,26 @@ import pyhf
 log = logging.getLogger(__name__)
 
 
+def _with_fallback(func, *args):
+    """Runs a fit-based function; on failure retries once with the other optimizer."""
+    try:
+        return func(*args)
+    except Exception:
+        tensorlib, optimizer = pyhf.get_backend()
+        alt = (
+            pyhf.optimize.scipy_optimizer()
+            if isinstance(optimizer, pyhf.optimize.minuit_optimizer)
+            else pyhf.optimize.minuit_optimizer(verbose=0)
+        )
+        pyhf.set_backend(tensorlib, alt)
+        try:
+            return func(*args)
+        except Exception:
+            return None
+        finally:
+            pyhf.set_backend(tensorlib, optimizer)
+
+
 def generate(
     model,
     data,
@@ -33,28 +53,53 @@ def generate(
     fixed_params=None,
     par_bounds=None,
 ) -> Dict[str, np.ndarray]:
-    """Test statistic distributions for each POI value (one job)."""
+    """Test-statistic distributions for each POI value (one job).
+
+    Same procedure as pyhf's ToyCalculator (toys thrown from the parameters
+    profiled on data for the tested POI and for POI = 0), but a toy whose fit
+    fails with both optimizers is dropped (and counted) instead of aborting.
+    """
+    from pyhf.infer.mle import fixed_poi_fit
+    from pyhf.infer.utils import get_test_stat
+
     np.random.seed(int(seed))
-    calc = pyhf.infer.calculators.ToyCalculator(
-        data,
-        model,
-        init_pars=init_pars,
-        par_bounds=par_bounds,
-        fixed_params=fixed_params,
-        test_stat=test_stat,
-        ntoys=int(ntoys),
-        track_progress=False,
-    )
+    init = init_pars if init_pars is not None else model.config.suggested_init()
+    bounds = par_bounds if par_bounds is not None else model.config.suggested_bounds()
+    fixed = fixed_params if fixed_params is not None else model.config.suggested_fixed()
+    teststat_func = get_test_stat(test_stat)
+    data = pyhf.tensorlib.astensor(data)
+
+    def ts(poi, sample):
+        return _with_fallback(lambda: float(teststat_func(poi, sample, model, init, bounds, fixed)))
+
+    bkg_pars = _with_fallback(lambda: fixed_poi_fit(1.0 if test_stat == "q0" else 0.0, data, model, init, bounds, fixed))
+    if bkg_pars is None:
+        raise RuntimeError("background-only fit to data failed")
+    bkg_sample = model.make_pdf(bkg_pars).sample((int(ntoys),))
     out = {"poi_values": np.asarray(poi_values, dtype=float), "seed": np.asarray(seed), "test_stat": np.asarray(test_stat)}
-    teststats, sb, b = [], [], []
+    teststats, sb, b, failed = [], [], [], []
     for poi in poi_values:
-        teststats.append(float(calc.teststatistic(float(poi))))
-        sb_dist, b_dist = calc.distributions(float(poi))
-        sb.append(np.asarray(sb_dist.samples))
-        b.append(np.asarray(b_dist.samples))
+        observed = ts(float(poi), data)
+        if observed is None:
+            raise RuntimeError(f"fit of the observed data failed for POI {poi}")
+        teststats.append(observed)
+        sig_pars = _with_fallback(lambda: fixed_poi_fit(float(poi), data, model, init, bounds, fixed))
+        if sig_pars is None:
+            raise RuntimeError(f"fixed-POI fit to data failed for POI {poi}")
+        sig_sample = model.make_pdf(sig_pars).sample((int(ntoys),))
+        sb_ts = [ts(float(poi), x) for x in sig_sample]
+        b_ts = [ts(float(poi), x) for x in bkg_sample]
+        n_fail = sum(t is None for t in sb_ts) + sum(t is None for t in b_ts)
+        if n_fail:
+            log.warning(f"POI {poi}: {n_fail} of {2 * int(ntoys)} toy fits failed and were dropped")
+        failed.append(n_fail)
+        sb.append(np.asarray([t for t in sb_ts if t is not None]))
+        b.append(np.asarray([t for t in b_ts if t is not None]))
     out["teststat"] = np.asarray(teststats)
-    out["sb"] = np.asarray(sb)
-    out["b"] = np.asarray(b)
+    # ragged if toys were dropped: store as object arrays
+    out["sb"] = np.asarray(sb, dtype=object) if len({len(x) for x in sb}) > 1 else np.asarray(sb)
+    out["b"] = np.asarray(b, dtype=object) if len({len(x) for x in b}) > 1 else np.asarray(b)
+    out["failed"] = np.asarray(failed)
     return out
 
 
@@ -88,16 +133,17 @@ def merge(files: Sequence[str], level: float = 0.05) -> Dict[str, Any]:
     files = sorted(files)
     if not files:
         raise FileNotFoundError("no toy files to merge")
-    loaded = [np.load(f) for f in files]
+    loaded = [np.load(f, allow_pickle=True) for f in files]
     pois = loaded[0]["poi_values"]
     for item in loaded[1:]:
         if not np.allclose(item["poi_values"], pois):
             raise ValueError("toy files with different POI values cannot be merged")
-    results: Dict[str, Any] = {"poi_values": pois.tolist(), "files": list(map(str, files)), "points": []}
+    roles = [str(r) for r in loaded[0]["roles"]] if "roles" in loaded[0].files else None
+    results: Dict[str, Any] = {"poi_values": pois.tolist(), "files": list(map(str, files)), "points": [], "roles": roles}
     obs_cls, exp_cls = [], []
     for i, poi in enumerate(pois):
-        sb = np.concatenate([item["sb"][i] for item in loaded])
-        b = np.concatenate([item["b"][i] for item in loaded])
+        sb = np.concatenate([np.asarray(item["sb"][i], dtype=float) for item in loaded])
+        b = np.concatenate([np.asarray(item["b"][i], dtype=float) for item in loaded])
         teststat = float(loaded[0]["teststat"][i])
         cls, clsb, clb, exp = _cls(teststat, sb, b)
         obs_cls.append(cls)
@@ -105,10 +151,14 @@ def merge(files: Sequence[str], level: float = 0.05) -> Dict[str, Any]:
         results["points"].append(
             {"poi": float(poi), "CLs": cls, "CLsb": clsb, "CLb": clb, "CLs_exp": exp, "ntoys_sb": int(len(sb)), "ntoys_b": int(len(b))}
         )
-    if len(pois) > 1:
-        results["upper_limit"] = interpolate_limit(pois, obs_cls, level)
-        exp_arr = np.asarray(exp_cls)
-        results["expected_upper_limit"] = [interpolate_limit(pois, exp_arr[:, k], level) for k in range(5)]
+    # upper limit from the scan points (all POIs if no roles are stored); CLs = 1 at POI = 0
+    scan = [i for i in range(len(pois)) if roles is None or roles[i] == "scan"]
+    if len(scan) > 1 or (scan and roles is not None):
+        sp = [0.0] + [float(pois[i]) for i in scan]
+        so = [1.0] + [obs_cls[i] for i in scan]
+        se = np.asarray([[1.0] * 5] + [exp_cls[i] for i in scan])
+        results["upper_limit"] = interpolate_limit(sp, so, level)
+        results["expected_upper_limit"] = [interpolate_limit(sp, se[:, k], level) for k in range(5)]
     return results
 
 
@@ -120,8 +170,8 @@ def interpolate_limit(pois: Sequence[float], cls: Sequence[float], level: float 
     """
     pois = np.asarray(pois, dtype=float)
     cls = np.asarray(cls, dtype=float)
-    good = np.isfinite(cls) & (cls > 0)
-    pois, cls = pois[good], cls[good]
+    good = np.isfinite(cls)
+    pois, cls = pois[good], np.maximum(cls[good], 1e-12)  # CLs = 0 happens with few toys
     below = np.where(cls < level)[0]
     if len(below) == 0:
         return float("nan")

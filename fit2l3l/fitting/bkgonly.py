@@ -129,8 +129,10 @@ def postfit_outputs(
         if poi is None:
             log.warning("ranking needs a POI or a free normalisation factor")
         else:
-            init, fixed, bounds = common.parameter_settings(prep["model_fit"], fit_cfg)
-            ranking = cabinetry.fit.ranking(prep["model_fit"], prep["data_fit"], fit_results=res, poi_name=poi,
+            rmodel = prep.get("ranking_model", prep["model_fit"])
+            rdata = prep.get("ranking_data", prep["data_fit"])
+            init, fixed, bounds = common.parameter_settings(rmodel, fit_cfg)
+            ranking = cabinetry.fit.ranking(rmodel, rdata, fit_results=res, poi_name=poi,
                                             init_pars=init, fix_pars=fixed, par_bounds=bounds)
             cabinetry.visualize.ranking(ranking, figure_folder=outdir / "plots", max_pars=rank_cfg.get("MaxPars", 20))
             write_json({"poi": poi, "labels": ranking.labels, "bestfit": ranking.bestfit, "uncertainty": ranking.uncertainty,

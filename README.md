@@ -42,7 +42,7 @@ repository. Without the script: `pip install -e .`.
 ## Quick start
 
 ```bash
-# toy ntuples in the HistFitter input format, then the full chain (≈10 min)
+# toy ntuples in the HistFitter input format, then the full chain (a few minutes)
 bash examples/run_toy_example.sh
 ```
 
@@ -93,6 +93,7 @@ General:
   POIBounds: [0, 10]          # default [0, 10] (excl), [0, 100] (disc)
   NormalizeSystematicsInCR: true   # HistFitter "Norm" systematics for free-floating backgrounds
   MissingTree: nominal        # nominal | error : missing systematic trees/histograms
+  MissingYields: error        # error | zero : region missing in the hard-coded (data-driven) yields
   Options: {isRPCmRPV: false} # passed to the analysis module
 
 Regions:
@@ -238,7 +239,7 @@ Contours:                     # exclusion only (also: fit2l3l contours)
 | `fit2l3l inspect <ws dir>` | regions, roles, yields, modifiers |
 | `fit2l3l fit <fit.yaml> [--workspace D] [--fit NAME] [--points ...] [--toys N --seed S] [-j N] [--set K=V]` | run fits |
 | `fit2l3l run <ws.yaml> <fit.yaml>` | build + fit |
-| `fit2l3l merge <fit dir> [--workspace D]` | merge exclusion points and toy files, list missing points |
+| `fit2l3l merge <fit dir> [--workspace D]` | merge exclusion points and toy files, list missing points; for a discovery fit dir: merge the upper-limit toys |
 | `fit2l3l contours <hypotest_list.json> --workspace D [--best SR=list.json] [--draw-cls] [--draw-xs] [--1d]` | contours, best-SR, 1D limits |
 | `fit2l3l batch <fit.yaml> [--points-per-job N] [--seeds 1-20 --toys N] [--system condor\|slurm\|local] [--queue workday] [--points-file missing_points.txt] [--submit]` | batch jobs |
 | `fit2l3l toy-inputs [...]` | toy ntuples for testing |
@@ -311,10 +312,20 @@ fit2l3l batch configs/fits/exclusion.yaml --seeds 1-20 --toys 500 --submit
   uncertainty stays Gaussian (`staterror`; pyhf has no Poisson Barlow-Beeston-lite).
 * **Missing inputs**: a theory uncertainty without a value for a region has no effect
   (warning), a missing systematic tree uses the nominal (warning; `MissingTree: error`
-  to fail). Negative MC yields are set to 1e-6.
+  to fail). Missing data-driven yields are an error (HistFitter used 0; set
+  `MissingYields: zero`). Signal points without trees are skipped
+  (`skipped_points.txt`). Negative MC yields are set to 1e-6.
+* **Data-driven stat. uncertainty larger than the yield**: the down variation
+  y − s would be ≤ 0 (HistFactory clamps the total at 0); fit2l3l uses y²/(y+s) when
+  y − s < 0.1·y. Bins with zero yield get no variation (as in HistFitter).
 * **Upper limits** default to a HistFitter-like linear scan (range found automatically,
   log-CLs interpolation); `UpperLimit.Scan: toms748` for pyhf's root finding.
-* **Toys**: CLs and the expected band follow pyhf's `ToyCalculator` conventions.
+* **Toys**: CLs and the expected band follow pyhf's `ToyCalculator` conventions
+  (toys thrown from the parameters profiled on data). A toy whose fit fails with both
+  optimizers is dropped and counted (warning) instead of aborting the job. With
+  `SaveToys`, toys are thrown at mu = 1, at the theory-varied mu and at the
+  `UpperLimit.Scan` points, so CLs, theory lines and limits all come from the merged
+  toys.
 
 ## Development
 

@@ -47,14 +47,19 @@ class Binning:
 
     @classmethod
     def from_any(cls, spec) -> "Binning":
+        """``(nbins, low, high)`` tuple, list of bin edges, dict or Binning."""
         if isinstance(spec, Binning):
             return spec
         if isinstance(spec, dict):
             return cls(**spec)
-        spec = list(spec)
-        if len(spec) == 3 and float(spec[0]).is_integer() and spec[0] >= 1 and spec[2] > spec[1]:
+        if isinstance(spec, tuple):
+            if len(spec) != 3 or not float(spec[0]).is_integer() or spec[0] < 1 or spec[2] <= spec[1]:
+                raise ValueError(f"binning tuple must be (nbins, low, high), got {spec}; use a list for bin edges")
             return cls(nbins=int(spec[0]), low=float(spec[1]), high=float(spec[2]))
-        return cls(edges=[float(x) for x in spec])
+        edges = [float(x) for x in spec]
+        if len(edges) < 2 or any(b <= a for a, b in zip(edges, edges[1:])):
+            raise ValueError(f"bin edges must be increasing, got {edges}")
+        return cls(edges=edges)
 
     @property
     def bin_edges(self) -> np.ndarray:
@@ -250,6 +255,8 @@ class TheorySyst:
     key: str
     selection: Optional[str] = None
     allow_binned: bool = True
+    #: binned values only when the sample is normalised in a CR (HistFitter: WZ)
+    binned_only_if_normalized: bool = False
     group: str = "TH"
 
 

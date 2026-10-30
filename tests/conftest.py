@@ -46,3 +46,9 @@ def excl_ws(toy_dir):
 @pytest.fixture(scope="session")
 def disc_ws(toy_dir):
     return _build(toy_dir, "disc_RpcGGwz2.yaml", Systematics="FAKES")
+
+
+@pytest.fixture(scope="session")
+def excl_nosys_ws(toy_dir):
+    return _build(toy_dir, "excl_GG2StepWZ_RpcGGwz.yaml", points=["376776", "376781"], Systematics="NONE",
+                  Name="excl_nosys")

@@ -75,6 +75,10 @@ if [ -n "$2" ]; then SEED_OPT="--seed $2"; fi
     jobs_file = directory / "jobs.txt"
     jobs_file.write_text("".join((f"{p} {s}" if s else p) + "\n" for p, s in jobs))
     with_seeds = bool(seeds)
+    # HTCondor splits "queue a, b from file" lines on commas *and* spaces and gives
+    # the remainder to the last variable: put the seed first, the points last
+    condor_file = directory / "jobs_condor.txt"
+    condor_file.write_text("".join((f"{s} {p}" if s else p) + "\n" for p, s in jobs))
 
     if system == "condor":
         queue = queue or "workday"
@@ -90,7 +94,7 @@ log        = {directory}/logs/job.$(ClusterId).log
 getenv     = True
 +JobFlavour = "{queue}"
 {('request_memory = ' + memory) if memory else ''}
-queue {"points, seed" if with_seeds else "points"} from {jobs_file}
+queue {"seed, points" if with_seeds else "points"} from {condor_file}
 """
         )
         cmd = ["condor_submit", str(sub)]

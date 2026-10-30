@@ -6,7 +6,8 @@
 * ``BINNINGS``  : region name -> {variable: (nbins, low, high)} for binned fits
   (formerly the ``binning`` block of ``hardCodedYields.json``).  The single-bin
   ``"cuts"`` binning is always available and does not need to be listed.
-  Explicit bin edges can be given as a list, e.g. ``'met': [100e3, 200e3, 400e3]``.
+  A *tuple* means (nbins, low, high); explicit bin edges are given as a *list*,
+  e.g. ``'met': [100e3, 200e3, 400e3]`` (two bins).
 
 Units follow the ntuples (MeV).
 

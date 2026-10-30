@@ -142,10 +142,18 @@ def build_workspace(
     engine.release([s["Name"] for s in bkg_cfg["Samples"]])  # background histograms no longer needed
 
     patches = []
+    skipped = []
     sig_folder = pathlib.Path(bkg_cfg["General"]["HistogramFolder"]) / "signal"
     for i, point in enumerate(comp.signal_points):
         folder = sig_folder / point.name
-        patch = _signal_patch(engine, comp, ws, point, folder, pruning)
+        try:
+            patch = _signal_patch(engine, comp, ws, point, folder, pruning)
+        except (RuntimeError, FileNotFoundError, KeyError) as exc:
+            # e.g. a DSID of the grid file without trees in signal.<lumi>.root
+            log.error(f"signal point {point.name} skipped: {exc}")
+            skipped.append(f"{point.name} {exc}")
+            engine.release([point.name])
+            continue
         patches.append(patch)
         engine.release([point.name])
         if not keep_histograms:
@@ -153,6 +161,11 @@ def build_workspace(
         if (i + 1) % 10 == 0 or i + 1 == len(comp.signal_points):
             log.info(f"built signal patches {i + 1}/{len(comp.signal_points)}")
 
+    (out / "skipped_points.txt").write_text("".join(f"{line}\n" for line in skipped))
+    if not patches:
+        raise RuntimeError(f"no signal patch could be built, see {out / 'skipped_points.txt'}")
+    if skipped:
+        log.warning(f"{len(skipped)} signal points skipped, see {out / 'skipped_points.txt'}")
     patchset = {
         "metadata": {
             "name": comp.meta["name"],

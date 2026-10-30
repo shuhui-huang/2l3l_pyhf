@@ -92,11 +92,16 @@ def cmd_run(args) -> None:
 
 
 def cmd_merge(args) -> None:
-    from fit2l3l.fitting import common, exclusion
+    from fit2l3l.fitting import common, discovery, exclusion
 
+    directory = pathlib.Path(args.directory)
+    if (directory / "discovery.json").exists():
+        res = discovery.merge_toys(directory)
+        print(f"discovery: {res['toy_files']} toy files merged, S95 obs = {res['S95_obs']:.2f}, exp = {res['S95_exp']:.2f}")
+        return
     ctx = common.load_context(args.workspace) if args.workspace else None
-    points = exclusion.merge(pathlib.Path(args.directory), ctx)
-    print(f"{len(points)} points merged into {pathlib.Path(args.directory) / 'hypotest_list.json'}")
+    points = exclusion.merge(directory, ctx)
+    print(f"{len(points)} points merged into {directory / 'hypotest_list.json'}")
 
 
 def cmd_contours(args) -> None:
